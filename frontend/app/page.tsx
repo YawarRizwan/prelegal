@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
+
 
 interface Party {
   printName: string;
@@ -40,10 +41,13 @@ const defaults: FormData = {
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   return (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {React.Children.map(children, (child) =>
+        React.isValidElement(child) ? React.cloneElement(child as React.ReactElement<{ id?: string }>, { id }) : child
+      )}
     </div>
   );
 }
@@ -65,22 +69,44 @@ function PartyFields({ title, value, onChange }: { title: string; value: Party; 
   );
 }
 
-function fill(text: string, val: string, fallback: string) {
-  return val.trim() ? val : fallback;
-}
-
 export default function Home() {
   const [form, setForm] = useState<FormData>(defaults);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
 
   const set = <K extends keyof FormData>(k: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: (e.target as HTMLInputElement).value }));
 
+  async function downloadAsPdf() {
+    if (isPdfGenerating) return;
+    const element = document.querySelector(".nda-document") as HTMLElement;
+    if (!element) return;
+    setIsPdfGenerating(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      await html2pdf()
+        .set({
+          margin: [10, 10, 10, 10],
+          filename: "mutual-nda.pdf",
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(element)
+        .save();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsPdfGenerating(false);
+    }
+  }
+
   const mndaTerm = form.mndaTermType === "years"
-    ? `Expires ${fill(form.mndaTermYears, form.mndaTermYears, "1")} year(s) from Effective Date.`
+    ? `Expires ${form.mndaTermYears.trim() || "1"} year(s) from Effective Date.`
     : "Continues until terminated in accordance with the terms of the MNDA.";
 
   const confidentialityTerm = form.confidentialityTermType === "years"
-    ? `${fill(form.confidentialityTermYears, form.confidentialityTermYears, "1")} year(s) from Effective Date, but in the case of trade secrets until Confidential Information is no longer considered a trade secret under applicable laws.`
+    ? `${form.confidentialityTermYears.trim() || "1"} year(s) from Effective Date, but in the case of trade secrets until Confidential Information is no longer considered a trade secret under applicable laws.`
     : "In perpetuity.";
 
   const purpose = form.purpose.trim() || "Evaluating whether to enter into a business relationship with the other party.";
@@ -143,7 +169,7 @@ export default function Home() {
         <p className="text-sm text-gray-500">Fill in the form to generate your Mutual Non-Disclosure Agreement</p>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-73px)]">
+      <div className="layout-shell flex flex-col lg:flex-row gap-0 h-[calc(100vh-73px)]">
         {/* Form panel */}
         <aside className="no-print w-full lg:w-96 bg-white border-r border-gray-200 overflow-y-auto p-5 flex-shrink-0">
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">Agreement Details</h2>
@@ -204,10 +230,12 @@ export default function Home() {
           <PartyFields title="Party 2" value={form.party2} onChange={p => setForm(f => ({ ...f, party2: p }))} />
 
           <button
-            onClick={() => window.print()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
+            onClick={downloadAsPdf}
+            disabled={isPdfGenerating}
+            aria-busy={isPdfGenerating}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded text-sm transition-colors"
           >
-            Download as PDF
+            {isPdfGenerating ? "Generating PDF…" : "Download as PDF"}
           </button>
         </aside>
 
