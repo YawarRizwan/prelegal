@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 
 
 interface Party {
@@ -41,13 +41,21 @@ const defaults: FormData = {
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const id = useId();
+  // Only clone the first React element child (the primary control) with the generated id.
+  // Secondary children (e.g. conditional year inputs, radio groups) are left untouched.
+  let firstCloned = false;
+  const enhancedChildren = React.Children.map(children, (child) => {
+    if (!firstCloned && React.isValidElement(child)) {
+      firstCloned = true;
+      return React.cloneElement(child as React.ReactElement<{ id?: string }>, { id });
+    }
+    return child;
+  });
   return (
     <div className="mb-4">
       <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {React.Children.map(children, (child) =>
-        React.isValidElement(child) ? React.cloneElement(child as React.ReactElement<{ id?: string }>, { id }) : child
-      )}
+      {enhancedChildren}
     </div>
   );
 }

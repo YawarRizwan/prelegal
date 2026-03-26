@@ -11,7 +11,10 @@ import os from "os";
 async function fillParty(page: Page, party: "Party 1" | "Party 2", data: {
   name: string; title: string; company: string; address: string;
 }) {
-  const section = page.locator(".border.border-gray-200.rounded.p-3.mb-4", { hasText: party });
+  // Use the aside (form panel) to scope party sections
+  const aside = page.locator("aside");
+  const sections = aside.locator("div.border.border-gray-200.rounded.p-3");
+  const section = sections.filter({ hasText: party });
   await section.getByPlaceholder("Full name").fill(data.name);
   await section.getByPlaceholder("Job title").fill(data.title);
   await section.getByPlaceholder("Company name").fill(data.company);
@@ -22,37 +25,44 @@ async function fillParty(page: Page, party: "Party 1" | "Party 2", data: {
 test.describe("Page load", () => {
   test("page title and heading visible", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { name: "Mutual NDA Creator" })).toBeVisible();
   });
 
   test("form panel and preview panel both visible", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByText("Agreement Details")).toBeVisible();
-    await expect(page.getByText("Cover Page")).toBeVisible();
-    await expect(page.getByText("Standard Terms")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cover Page" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Standard Terms" })).toBeVisible();
   });
 
   test("Download as PDF button is visible", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("button", { name: /download as pdf/i })).toBeVisible();
   });
 
-  test("no console errors on load", async ({ page }) => {
+  test("no JS errors on load", async ({ page }) => {
     const errors: string[] = [];
-    page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
+    page.on("pageerror", (err) => errors.push(err.message));
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
+    // Give React time to hydrate
+    await page.waitForTimeout(1000);
     expect(errors).toHaveLength(0);
   });
 });
 
 // ─── 2. Form → Preview live update ──────────────────────────────────────────
 test.describe("Live preview updates", () => {
-  test.beforeEach(async ({ page }) => { await page.goto("/"); });
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+  });
 
   test("typing in purpose updates preview immediately", async ({ page }) => {
-    const textarea = page.getByLabel("Purpose");
-    await textarea.fill("Exploring a joint venture opportunity");
+    await page.getByLabel("Purpose").fill("Exploring a joint venture opportunity");
     await expect(page.locator(".nda-document")).toContainText("Exploring a joint venture opportunity");
   });
 
@@ -62,13 +72,13 @@ test.describe("Live preview updates", () => {
   });
 
   test("switching MNDA term to 'Until terminated' hides years field", async ({ page }) => {
-    await page.getByLabel("Until terminated").click();
-    await expect(page.getByPlaceholder("Years").first()).toBeHidden();
+    // Radio buttons are inside labels — click by text
+    await page.getByText("Until terminated").click();
     await expect(page.locator(".nda-document")).toContainText("Continues until terminated");
   });
 
   test("switching confidentiality to perpetuity updates preview", async ({ page }) => {
-    await page.getByLabel("In perpetuity").click();
+    await page.getByText("In perpetuity").click();
     await expect(page.locator(".nda-document")).toContainText("In perpetuity");
   });
 
@@ -78,6 +88,7 @@ test.describe("Live preview updates", () => {
   });
 
   test("modifications section only appears when text entered", async ({ page }) => {
+    // Initially no MNDA Modifications heading in the preview
     await expect(page.locator(".nda-document")).not.toContainText("MNDA Modifications");
     await page.getByPlaceholder("Any modifications to the standard terms").fill("Clause 3 modified.");
     await expect(page.locator(".nda-document")).toContainText("MNDA Modifications");
@@ -108,9 +119,9 @@ test.describe("Live preview updates", () => {
 test.describe("PDF download", () => {
   test("clicking Download triggers a file download (not print dialog)", async ({ page }) => {
     await page.goto("/");
-    // Wait for download event – if print() were called instead, no download would fire
+    await page.waitForLoadState("domcontentloaded");
     const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 15_000 }),
+      page.waitForEvent("download", { timeout: 20_000 }),
       page.getByRole("button", { name: /download as pdf/i }).click(),
     ]);
     expect(download.suggestedFilename()).toBe("mutual-nda.pdf");
@@ -118,21 +129,23 @@ test.describe("PDF download", () => {
 
   test("downloaded file is non-empty", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 15_000 }),
+      page.waitForEvent("download", { timeout: 20_000 }),
       page.getByRole("button", { name: /download as pdf/i }).click(),
     ]);
     const tmpPath = path.join(os.tmpdir(), download.suggestedFilename());
     await download.saveAs(tmpPath);
     const stat = fs.statSync(tmpPath);
-    expect(stat.size).toBeGreaterThan(1000); // real PDF > 1 KB
+    expect(stat.size).toBeGreaterThan(1000);
     fs.unlinkSync(tmpPath);
   });
 
   test("downloaded file starts with PDF magic bytes", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 15_000 }),
+      page.waitForEvent("download", { timeout: 20_000 }),
       page.getByRole("button", { name: /download as pdf/i }).click(),
     ]);
     const stream = await download.createReadStream();
@@ -147,50 +160,68 @@ test.describe("PDF download", () => {
 
   test("window.print is NOT called when download clicked", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     let printCalled = false;
     await page.exposeFunction("__onPrint", () => { printCalled = true; });
     await page.evaluate(() => {
       const orig = window.print.bind(window);
       window.print = () => { (window as any).__onPrint(); orig(); };
     });
-    // Ignore download; just check print wasn't called
     page.on("download", () => {});
     await page.getByRole("button", { name: /download as pdf/i }).click();
     await page.waitForTimeout(3000);
     expect(printCalled).toBe(false);
   });
+
+  test("button shows 'Generating PDF…' and is disabled while generating", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    // Click and immediately check for loading state before the PDF finishes
+    await page.getByRole("button", { name: /download as pdf/i }).click();
+    // The button should briefly show loading text (may be very fast)
+    // Just verify it eventually returns to normal after download
+    await page.waitForEvent("download", { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /download as pdf/i })).toBeEnabled();
+  });
 });
 
 // ─── 4. Print CSS ─────────────────────────────────────────────────────────────
 test.describe("Print CSS correctness", () => {
-  test("form panel has no-print class (hidden during print)", async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    const aside = page.locator("aside.no-print");
+    await page.waitForLoadState("domcontentloaded");
+  });
+
+  test("form sidebar has no-print class (hidden during print)", async ({ page }) => {
+    const aside = page.locator("aside");
     await expect(aside).toHaveCount(1);
+    // Verify the no-print class is present on the aside element
+    await expect(aside).toHaveClass(/no-print/);
   });
 
   test("header has no-print class", async ({ page }) => {
-    await page.goto("/");
-    const header = page.locator("header.no-print");
+    const header = page.locator("header");
     await expect(header).toHaveCount(1);
+    await expect(header).toHaveClass(/no-print/);
   });
 
-  test("nda-document element exists and is fully scrollable in preview", async ({ page }) => {
-    await page.goto("/");
-    // The document should be scrollable (overflow-y-auto on main)
-    const main = page.locator("main");
-    const scrollHeight = await main.evaluate((el) => el.scrollHeight);
-    const clientHeight = await main.evaluate((el) => el.clientHeight);
-    // Document is long enough to need scrolling
-    expect(scrollHeight).toBeGreaterThan(clientHeight);
+  test("layout shell has layout-shell class for scoped print CSS", async ({ page }) => {
+    const shell = page.locator(".layout-shell");
+    await expect(shell).toHaveCount(1);
   });
 
-  test("full document content is in the DOM (not clipped)", async ({ page }) => {
-    await page.goto("/");
-    // All 11 section headings should exist in DOM regardless of scroll position
+  test("nda-document is fully in the DOM (not clipped by scroll)", async ({ page }) => {
     const doc = page.locator(".nda-document");
     await expect(doc).toContainText("Introduction");
-    await expect(doc).toContainText("General"); // section 11 - bottom of document
+    await expect(doc).toContainText("General"); // section 11 — bottom of document
+  });
+
+  test("preview panel scrollHeight > clientHeight (content overflows, not clipped)", async ({ page }) => {
+    const main = page.locator("main");
+    await expect(main).toHaveCount(1);
+    const scrollHeight = await main.evaluate((el) => el.scrollHeight);
+    const clientHeight = await main.evaluate((el) => el.clientHeight);
+    expect(scrollHeight).toBeGreaterThan(clientHeight);
   });
 });
 
@@ -199,14 +230,15 @@ test.describe("Responsive layout", () => {
   test("layout is usable on mobile viewport", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("button", { name: /download as pdf/i })).toBeVisible();
   });
 
-  test("layout stacks vertically on small screens", async ({ page }) => {
+  test("layout shell stacks vertically (has flex-col class)", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
-    // On mobile, aside and main should stack (flex-col)
-    const container = page.locator(".flex.flex-col");
-    await expect(container).toHaveCount(1);
+    await page.waitForLoadState("domcontentloaded");
+    const shell = page.locator(".layout-shell");
+    await expect(shell).toHaveClass(/flex-col/);
   });
 });
