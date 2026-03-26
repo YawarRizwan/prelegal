@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  body { font-size: 11pt; }
+  /* Reset layout constraints so the full document prints, not just the visible viewport */
+  html, body { height: auto !important; overflow: visible !important; }
+  .min-h-screen { min-height: unset !important; }
+  /* Target only the top-level layout shell — not all flex elements (which would break inline radio groups) */
+  .layout-shell { display: block !important; }
+  main { height: auto !important; overflow: visible !important; display: block !important; }
+  .nda-document { max-width: 100%; padding: 0; box-shadow: none; border-radius: 0; }
+}
