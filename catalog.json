@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Mutual Non-Disclosure Agreement",
+    "description": "A standard mutual NDA that allows two parties to share confidential information for a specific purpose while protecting each party's proprietary information. Created by a committee of over 40 attorneys and designed to be used with a separate cover page that specifies the parties, purpose, term, and governing law.",
+    "filename": "Mutual-NDA.md"
+  },
+  {
+    "name": "Mutual NDA Cover Page",
+    "description": "The cover page template to be used with the Common Paper Mutual NDA Standard Terms. Parties fill in the purpose, effective date, term, governing law, and signatures to create a complete, executed mutual non-disclosure agreement.",
+    "filename": "Mutual-NDA-coverpage.md"
+  },
+  {
+    "name": "Cloud Service Agreement",
+    "description": "A comprehensive agreement for selling and buying cloud software and SaaS products, covering access and use rights, restrictions, privacy, payment, term, warranties, liability, indemnification, and confidentiality. Created by a committee of over 40 attorneys representing technology vendors and procurement teams.",
+    "filename": "CSA.md"
+  },
+  {
+    "name": "Design Partner Agreement",
+    "description": "A standard agreement for early-access design partner programs, where a partner gains early use of a product in exchange for providing feedback to help the provider develop and improve the product for general release. The provider retains all rights to feedback and resulting product improvements.",
+    "filename": "design-partner-agreement.md"
+  },
+  {
+    "name": "Service Level Agreement",
+    "description": "An SLA designed to be used alongside the Common Paper Cloud Service Agreement, defining uptime targets, response time targets, and the service credits available to the customer if those targets are not met. Includes termination rights if the cloud service fails to meet the target uptime for two out of any three consecutive months.",
+    "filename": "sla.md"
+  },
+  {
+    "name": "Professional Services Agreement",
+    "description": "A standard agreement for engaging professional services, covering how services are performed under statements of work, intellectual property ownership of deliverables, payment, confidentiality, and liability. Supports change orders, subcontractors, and project-based engagements.",
+    "filename": "psa.md"
+  },
+  {
+    "name": "Data Processing Agreement",
+    "description": "A GDPR-compliant data processing agreement governing how a provider processes personal data on behalf of a customer, including provisions for subprocessors, restricted international transfers (with EEA SCCs and UK Addendum), security incident response, audit rights, and data deletion. Designed to supplement an existing commercial agreement.",
+    "filename": "DPA.md"
+  },
+  {
+    "name": "Partnership Agreement",
+    "description": "A standard agreement for business partnerships that defines each party's obligations, includes a trademark license for co-marketing, handles payment and confidentiality, and provides an escalation procedure for resolving disputes before seeking legal relief. Suitable for referral, reseller, or co-marketing arrangements.",
+    "filename": "Partnership-Agreement.md"
+  },
+  {
+    "name": "Software License Agreement",
+    "description": "A standard agreement for licensing on-premises or self-hosted software, granting the customer a limited license to install and use the software for permitted uses during the subscription period. Covers restrictions, payment, updates, open source software obligations, warranty, liability, indemnification, and confidentiality.",
+    "filename": "Software-License-Agreement.md"
+  },
+  {
+    "name": "Pilot Agreement",
+    "description": "A short-term trial agreement that allows a prospective customer to access and evaluate a product before committing to a full commercial agreement. The agreement has a defined pilot period, lightweight terms compared to a full commercial contract, and can be paid or free.",
+    "filename": "Pilot-Agreement.md"
+  },
+  {
+    "name": "Business Associate Agreement",
+    "description": "A HIPAA-compliant business associate agreement governing the use and disclosure of protected health information (PHI) by a service provider acting as a business associate on behalf of a covered entity. Covers safeguards, subcontractor requirements, breach notification, individual rights requests, and data return or destruction upon termination.",
+    "filename": "BAA.md"
+  },
+  {
+    "name": "AI Addendum",
+    "description": "An addendum to an existing commercial agreement that governs the use of AI and machine learning features within a product, addressing model training permissions, input and output ownership, restrictions on AI use in regulated industries, and disclaimers about the nature of AI-generated content.",
+    "filename": "AI-Addendum.md"
+  }
+]
