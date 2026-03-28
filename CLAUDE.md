@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports all 11 document types via AI chat with full user authentication and document persistence.
+No product features are implemented yet. The current state is the V1 technical foundation (placeholder UI, FastAPI backend, SQLite bootstrap). Auth, AI chat, and document persistence are planned for future tickets.
 
 ## Development process
 
@@ -29,8 +29,8 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 The entire project should be packaged into a Docker container.  
 The backend should be in backend/ and be a uv project, using FastAPI.  
 The frontend should be in frontend/  
-The database should use SQLLite and be created from scratch each time the Docker container is brought up, allowing for a users table with sign up and sign in.  
-Consider statically building the frontend and serving it via FastAPI, if that will work.  
+The database uses SQLite, persisted via a Docker named volume (not recreated on each start). A users table for sign up and sign in will be added when auth is implemented.
+The frontend is statically built (`next build` with `output: "export"`) and served by FastAPI via `StaticFiles` at `/`.
 There should be scripts in scripts/ for:  
 ```bash
 # Mac
