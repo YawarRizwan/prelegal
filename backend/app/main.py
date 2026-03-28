@@ -1,11 +1,16 @@
 """Prelegal FastAPI application."""
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
+
+STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
 
 
 @asynccontextmanager
@@ -27,3 +32,8 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve static frontend — mounted last so API routes take precedence
+if STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
