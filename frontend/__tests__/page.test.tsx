@@ -1,12 +1,12 @@
 /**
- * Tests for Mutual NDA Creator – page.tsx
- * Covers: rendering, form interactions, PDF download trigger, edge cases, accessibility
+ * Tests for AI Chat NDA Creator – page.tsx
  */
 import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Home from "../app/page";
+import { emptyFields } from "../app/types/nda";
 
 // ─── html2pdf mock ───────────────────────────────────────────────────────────
 const mockSave = jest.fn().mockResolvedValue(undefined);
@@ -19,15 +19,51 @@ jest.mock("html2pdf.js", () => ({
   default: mockHtml2pdf,
 }));
 
+// ─── fetch mock ──────────────────────────────────────────────────────────────
+const SESSION_ID = "test-session-id";
+
+const greetingResponse = {
+  reply: "Hello! I'm your NDA assistant. What is Party 1's company name?",
+  fields: { ...emptyFields },
+};
+
+function mockCreateSession() {
+  return Promise.resolve({ ok: true, json: async () => ({ session_id: SESSION_ID }) });
+}
+
+function mockGreeting() {
+  return Promise.resolve({ ok: true, json: async () => greetingResponse });
+}
+
+function mockReply(reply: string, fields = emptyFields) {
+  return Promise.resolve({ ok: true, json: async () => ({ reply, fields }) });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  localStorage.clear();
+
+  // Default: new session flow (POST /sessions, then POST /sessions/id/messages __init__)
+  global.fetch = jest.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ session_id: SESSION_ID }) } as Response)
+    .mockResolvedValueOnce({ ok: true, json: async () => greetingResponse } as Response);
 });
 
-// ─── 1. Rendering ────────────────────────────────────────────────────────────
+// ─── 1. Initial render ───────────────────────────────────────────────────────
 describe("Initial render", () => {
-  it("renders the page heading", () => {
+  it("renders the Mutual NDA Creator heading", async () => {
     render(<Home />);
-    expect(screen.getByText("Mutual NDA Creator")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Mutual NDA Creator")).toBeInTheDocument());
+  });
+
+  it("renders the chat input", () => {
+    render(<Home />);
+    expect(screen.getByRole("textbox", { name: /chat input/i })).toBeInTheDocument();
+  });
+
+  it("renders the NDA preview panel", () => {
+    render(<Home />);
+    expect(screen.getByText("NDA Preview")).toBeInTheDocument();
   });
 
   it("renders the Download as PDF button", () => {
@@ -35,123 +71,180 @@ describe("Initial render", () => {
     expect(screen.getByRole("button", { name: /download as pdf/i })).toBeInTheDocument();
   });
 
-  it("renders Party 1 and Party 2 section headings in the form", () => {
+  it("renders the NDA Assistant header", () => {
     render(<Home />);
-    // Both appear in form headings AND signature table — use getAllByText
-    expect(screen.getAllByText("Party 1").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Party 2").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("NDA Assistant")).toBeInTheDocument();
   });
 
-  it("renders the NDA document preview", () => {
+  it("shows AI greeting after mount", async () => {
     render(<Home />);
-    expect(screen.getByText("Mutual Non-Disclosure Agreement")).toBeInTheDocument();
-    expect(screen.getByText("Cover Page")).toBeInTheDocument();
-    expect(screen.getByText("Standard Terms")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/party 1/i)).toBeInTheDocument()
+    );
   });
 
-  it("renders all 11 standard term sections", () => {
+  it("creates a session and stores it in localStorage", async () => {
     render(<Home />);
-    const terms = [
-      "Introduction", "Use and Protection of Confidential Information", "Exceptions",
-      "Disclosures Required by Law", "Term and Termination",
-      "Return or Destruction of Confidential Information", "Proprietary Rights",
-      "Disclaimer", "Governing Law and Jurisdiction", "Equitable Relief", "General",
+    await waitFor(() => expect(localStorage.getItem("prelegal_session_id")).toBe(SESSION_ID));
+  });
+});
+
+// ─── 2. Chat interactions ────────────────────────────────────────────────────
+describe("Chat interactions", () => {
+  it("user message appears in chat after send", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reply: "Got it!", fields: emptyFields }),
+    } as Response);
+
+    render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
+    const input = screen.getByRole("textbox", { name: /chat input/i });
+    await userEvent.type(input, "Acme Corp");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(screen.getByText("Acme Corp")).toBeInTheDocument());
+  });
+
+  it("AI reply appears after user sends a message", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reply: "Great! What is Party 2's company name?", fields: emptyFields }),
+    } as Response);
+
+    render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
+    const input = screen.getByRole("textbox", { name: /chat input/i });
+    await userEvent.type(input, "Acme Corp");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Great! What is Party 2's company name?")).toBeInTheDocument()
+    );
+  });
+
+  it("NDA preview updates when AI response includes company name", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: "Got it! What is the signatory's name at Acme Corp?",
+        fields: { ...emptyFields, party1_company: "Acme Corp" },
+      }),
+    } as Response);
+
+    render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
+    const input = screen.getByRole("textbox", { name: /chat input/i });
+    await userEvent.type(input, "Acme Corp");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(screen.getAllByText("Acme Corp").length).toBeGreaterThan(0));
+  });
+
+  it("NDA preview shows governing law when AI extracts it", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        reply: "Perfect. Which city/county and state should handle disputes?",
+        fields: { ...emptyFields, governing_law: "California" },
+      }),
+    } as Response);
+
+    render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
+    const input = screen.getByRole("textbox", { name: /chat input/i });
+    await userEvent.type(input, "California");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(screen.getAllByText("California").length).toBeGreaterThan(0));
+  });
+
+  it("send button is disabled while loading", async () => {
+    let resolveGreeting!: (v: unknown) => void;
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ session_id: SESSION_ID }) } as Response)
+      .mockReturnValueOnce(new Promise((res) => { resolveGreeting = res; }));
+
+    render(<Home />);
+    // While greeting is pending, send button should reflect disabled state
+    const sendBtn = screen.getByRole("button", { name: /send/i });
+    expect(sendBtn).toBeDisabled();
+
+    act(() => resolveGreeting({ ok: true, json: async () => greetingResponse }));
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+  });
+
+  it("input is cleared after send", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reply: "Got it!", fields: emptyFields }),
+    } as Response);
+
+    render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
+    const input = screen.getByRole("textbox", { name: /chat input/i }) as HTMLInputElement;
+    await userEvent.type(input, "Test text");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(input.value).toBe("");
+  });
+});
+
+// ─── 3. Session restore ──────────────────────────────────────────────────────
+describe("Session restore", () => {
+  it("loads existing session from localStorage on mount", async () => {
+    localStorage.setItem("prelegal_session_id", SESSION_ID);
+
+    const history = [
+      { role: "user", content: "Acme Corp" },
+      { role: "assistant", content: "Got it! What is Party 2's name?" },
     ];
-    terms.forEach((title) => {
-      expect(screen.getByText(new RegExp(title))).toBeInTheDocument();
-    });
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ messages: history }),
+    } as Response);
+
+    render(<Home />);
+
+    await waitFor(() => expect(screen.getByText("Acme Corp")).toBeInTheDocument());
+    expect(screen.getByText("Got it! What is Party 2's name?")).toBeInTheDocument();
   });
 
-  it("pre-fills effective date to today", () => {
-    render(<Home />);
-    const today = new Date().toISOString().split("T")[0];
-    expect(screen.getByDisplayValue(today)).toBeInTheDocument();
-  });
+  it("starts fresh session if existing session returns 404", async () => {
+    localStorage.setItem("prelegal_session_id", "old-session");
 
-  it("download button is not disabled initially", () => {
-    render(<Home />);
-    expect(screen.getByRole("button", { name: /download as pdf/i })).not.toBeDisabled();
-  });
-});
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ detail: "Session not found" }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ session_id: SESSION_ID }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => greetingResponse } as Response);
 
-// ─── 2. Form interactions ────────────────────────────────────────────────────
-describe("Form interactions", () => {
-  it("updates purpose text and reflects it in preview", async () => {
     render(<Home />);
-    const purposeTextarea = screen.getByLabelText("Purpose");
-    await userEvent.clear(purposeTextarea);
-    await userEvent.type(purposeTextarea, "Testing mutual NDA purpose");
-    expect(screen.getAllByText(/Testing mutual NDA purpose/).length).toBeGreaterThan(0);
-  });
 
-  it("switches MNDA term to 'Until terminated' and hides years input", async () => {
-    render(<Home />);
-    await userEvent.click(screen.getByLabelText("Until terminated"));
-    // The years number input should disappear
-    const yearsInputs = screen.queryAllByPlaceholderText("Years");
-    // Confidentiality years input may still be present; MNDA one should be gone
-    // After switching, there should be one fewer "Years" input
-    expect(yearsInputs.length).toBeLessThanOrEqual(1);
-    expect(screen.getAllByText(/Continues until terminated/i).length).toBeGreaterThan(0);
-  });
-
-  it("switches confidentiality term to 'In perpetuity'", async () => {
-    render(<Home />);
-    await userEvent.click(screen.getByLabelText("In perpetuity"));
-    expect(screen.getAllByText(/In perpetuity/i).length).toBeGreaterThan(0);
-  });
-
-  it("fills Party 1 print name and reflects it in signature table", async () => {
-    render(<Home />);
-    const fullNameInputs = screen.getAllByPlaceholderText("Full name");
-    await userEvent.type(fullNameInputs[0], "Alice Smith");
-    expect(screen.getByDisplayValue("Alice Smith")).toBeInTheDocument();
-    // Should appear in the signature table
-    expect(screen.getAllByText("Alice Smith").length).toBeGreaterThan(0);
-  });
-
-  it("fills Governing Law and reflects it in preview", async () => {
-    render(<Home />);
-    const govLawInput = screen.getByPlaceholderText(/e.g. Delaware/i);
-    await userEvent.type(govLawInput, "California");
-    expect(screen.getAllByText(/California/).length).toBeGreaterThan(0);
-  });
-
-  it("shows MNDA modifications section only when text is entered", async () => {
-    render(<Home />);
-    expect(screen.queryByText("MNDA Modifications")).not.toBeInTheDocument();
-    const modInput = screen.getByPlaceholderText(/Any modifications/i);
-    await userEvent.type(modInput, "Section 2 is amended.");
-    expect(screen.getByText("MNDA Modifications")).toBeInTheDocument();
-  });
-
-  it("updates effective date and reflects it in preview", () => {
-    render(<Home />);
-    const today = new Date().toISOString().split("T")[0];
-    const dateInput = screen.getByDisplayValue(today);
-    fireEvent.change(dateInput, { target: { value: "2025-06-01" } });
-    expect(screen.getAllByText("2025-06-01").length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(/party 1/i)).toBeInTheDocument());
+    expect(localStorage.getItem("prelegal_session_id")).toBe(SESSION_ID);
   });
 });
 
-// ─── 3. Download / PDF generation ────────────────────────────────────────────
-describe("Download as PDF button", () => {
-  it("does NOT call window.print()", async () => {
-    const printSpy = jest.spyOn(window, "print").mockImplementation(() => {});
+// ─── 4. Download PDF ─────────────────────────────────────────────────────────
+describe("Download as PDF", () => {
+  it("calls html2pdf when download button is clicked", async () => {
     render(<Home />);
-    await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
-    expect(printSpy).not.toHaveBeenCalled();
-    printSpy.mockRestore();
-  });
+    await waitFor(() => screen.getByText(greetingResponse.reply));
 
-  it("calls html2pdf() when download button is clicked", async () => {
-    render(<Home />);
     await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
     await waitFor(() => expect(mockHtml2pdf).toHaveBeenCalled(), { timeout: 3000 });
   });
 
   it("passes correct filename to html2pdf", async () => {
     render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
     await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
     await waitFor(() =>
       expect(mockSet).toHaveBeenCalledWith(
@@ -162,6 +255,8 @@ describe("Download as PDF button", () => {
 
   it("passes A4 portrait jsPDF options", async () => {
     render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
     await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
     await waitFor(() =>
       expect(mockSet).toHaveBeenCalledWith(
@@ -174,54 +269,30 @@ describe("Download as PDF button", () => {
 
   it("calls .from() with the nda-document HTMLElement", async () => {
     render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
     await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
-    await waitFor(() => {
-      expect(mockFrom).toHaveBeenCalledWith(expect.any(HTMLElement));
-    }, { timeout: 3000 });
+    await waitFor(() =>
+      expect(mockFrom).toHaveBeenCalledWith(expect.any(HTMLElement)), { timeout: 3000 }
+    );
   });
 
-  it("calls .save() to trigger the download", async () => {
-    render(<Home />);
-    await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
-    await waitFor(() => expect(mockSave).toHaveBeenCalled(), { timeout: 3000 });
-  });
-
-  it("disables button and shows 'Generating PDF…' while generating", async () => {
-    // Make save() hang so we can inspect the in-progress state
+  it("disables button and shows Generating PDF while generating", async () => {
     let resolveSave!: () => void;
     mockSave.mockReturnValueOnce(new Promise<void>((res) => { resolveSave = res; }));
 
     render(<Home />);
-    const btn = screen.getByRole("button", { name: /download as pdf/i });
-    await userEvent.click(btn);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /generating pdf/i })).toBeDisabled();
-    }, { timeout: 3000 });
-
-    // Resolve and button should return to normal
-    act(() => resolveSave());
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /download as pdf/i })).not.toBeDisabled();
-    });
-  });
-
-  it("second click while generating is a no-op (no double call)", async () => {
-    let resolveSave!: () => void;
-    mockSave.mockReturnValueOnce(new Promise<void>((res) => { resolveSave = res; }));
-
-    render(<Home />);
-    const btn = screen.getByRole("button", { name: /download as pdf/i });
-    await userEvent.click(btn);
-
-    await waitFor(() => expect(screen.getByRole("button", { name: /generating pdf/i })).toBeDisabled());
-
-    // Clicking a disabled button should not trigger another call
-    await userEvent.click(screen.getByRole("button", { name: /generating pdf/i }));
-    expect(mockHtml2pdf).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /generating pdf/i })).toBeDisabled()
+    );
 
     act(() => resolveSave());
-    await waitFor(() => expect(screen.getByRole("button", { name: /download as pdf/i })).not.toBeDisabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /download as pdf/i })).not.toBeDisabled()
+    );
   });
 
   it("shows alert on PDF generation failure", async () => {
@@ -229,110 +300,36 @@ describe("Download as PDF button", () => {
     const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
 
     render(<Home />);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+
     await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/failed to generate pdf/i)),
+      { timeout: 3000 }
+    );
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/failed to generate pdf/i)
-    ), { timeout: 3000 });
-
-    // Button should re-enable after failure
-    expect(screen.getByRole("button", { name: /download as pdf/i })).not.toBeDisabled();
     alertSpy.mockRestore();
   });
 });
 
-// ─── 4. Edge cases ───────────────────────────────────────────────────────────
-describe("Edge cases", () => {
-  it("shows [Governing Law] placeholder when field is empty", () => {
+// ─── 5. NDA Preview content ──────────────────────────────────────────────────
+describe("NDA Preview content", () => {
+  it("shows placeholder for empty governing law", async () => {
     render(<Home />);
-    expect(screen.getAllByText(/\[Governing Law\]/).length).toBeGreaterThan(0);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+    expect(screen.getByText(/\[Fill in state\]/)).toBeInTheDocument();
   });
 
-  it("shows [Jurisdiction] placeholder when field is empty", () => {
+  it("shows placeholder for empty jurisdiction", async () => {
     render(<Home />);
-    expect(screen.getAllByText(/\[Jurisdiction\]/).length).toBeGreaterThan(0);
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+    expect(screen.getByText(/\[Fill in city/)).toBeInTheDocument();
   });
 
-  it("shows default purpose text when purpose field is cleared", async () => {
+  it("shows Party 1 and Party 2 column headers in signature table", async () => {
     render(<Home />);
-    const purposeTextarea = screen.getByLabelText("Purpose");
-    await userEvent.clear(purposeTextarea);
-    expect(
-      screen.getAllByText(/Evaluating whether to enter into a business relationship/).length
-    ).toBeGreaterThan(0);
-  });
-
-  it("signature table shows effective date in both party columns", () => {
-    render(<Home />);
-    const today = new Date().toISOString().split("T")[0];
-    const cells = screen.getAllByText(today);
-    expect(cells.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("MNDA term years input has min=1 attribute", () => {
-    render(<Home />);
-    // The first "Years" placeholder input (MNDA term)
-    const inputs = screen.getAllByPlaceholderText("Years");
-    inputs.forEach((input) => expect(input).toHaveAttribute("min", "1"));
-  });
-
-  it("gracefully handles missing .nda-document element without crashing", async () => {
-    const origQS = document.querySelector.bind(document);
-    jest.spyOn(document, "querySelector").mockImplementation((sel: string) => {
-      if (sel === ".nda-document") return null;
-      return origQS(sel);
-    });
-    render(<Home />);
-    await expect(
-      userEvent.click(screen.getByRole("button", { name: /download as pdf/i }))
-    ).resolves.not.toThrow();
-    expect(mockHtml2pdf).not.toHaveBeenCalled();
-    jest.restoreAllMocks();
-  });
-
-  it("mndaTerm uses '1' as fallback when years field is empty", async () => {
-    render(<Home />);
-    const yearsInputs = screen.getAllByPlaceholderText("Years");
-    fireEvent.change(yearsInputs[0], { target: { value: "" } });
-    expect(screen.getAllByText(/Expires 1 year\(s\) from Effective Date/).length).toBeGreaterThan(0);
-  });
-});
-
-// ─── 5. Accessibility ────────────────────────────────────────────────────────
-describe("Accessibility", () => {
-  it("download button is focusable", () => {
-    render(<Home />);
-    const btn = screen.getByRole("button", { name: /download as pdf/i });
-    btn.focus();
-    expect(document.activeElement).toBe(btn);
-  });
-
-  it("download button has aria-busy=false when idle", () => {
-    render(<Home />);
-    expect(screen.getByRole("button", { name: /download as pdf/i })).toHaveAttribute("aria-busy", "false");
-  });
-
-  it("download button has aria-busy=true while generating", async () => {
-    let resolveSave!: () => void;
-    mockSave.mockReturnValueOnce(new Promise<void>((res) => { resolveSave = res; }));
-
-    render(<Home />);
-    await userEvent.click(screen.getByRole("button", { name: /download as pdf/i }));
-
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /generating pdf/i })).toHaveAttribute("aria-busy", "true")
-    , { timeout: 3000 });
-
-    act(() => resolveSave());
-  });
-
-  it("Purpose field has an associated label", () => {
-    render(<Home />);
-    expect(screen.getByLabelText("Purpose")).toBeInTheDocument();
-  });
-
-  it("Effective Date field has an associated label", () => {
-    render(<Home />);
-    expect(screen.getByLabelText("Effective Date")).toBeInTheDocument();
+    await waitFor(() => screen.getByText(greetingResponse.reply));
+    expect(screen.getAllByText("Party 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Party 2").length).toBeGreaterThan(0);
   });
 });

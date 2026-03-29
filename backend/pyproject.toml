@@ -6,6 +6,8 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "aiofiles>=24.1",
+    "litellm>=1.40",
+    "python-dotenv>=1.0",
 ]
 
 [build-system]

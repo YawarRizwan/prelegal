@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.chat import router as chat_router
 from app.database import init_db
 
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -23,10 +24,12 @@ app = FastAPI(title="Prelegal API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(chat_router)
 
 
 @app.get("/health")
