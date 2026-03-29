@@ -155,7 +155,7 @@ export default function Home() {
 
         {/* Two-panel main area */}
         <div className="flex flex-1 overflow-hidden">
-          <div style={{ flex: 1 }} className="overflow-hidden">
+          <div style={{ flex: "0 0 42%" }} className="overflow-hidden">
             <ChatPanel messages={messages} loading={loading} onSend={handleSend} />
           </div>
           <div style={{ flex: 1 }} className="overflow-hidden">

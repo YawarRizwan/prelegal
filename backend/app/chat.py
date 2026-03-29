@@ -96,7 +96,7 @@ def _call_llm(history: list[dict]) -> tuple[str, NdaFields]:
         response_format={"type": "json_object"},
         api_key=os.environ["OPENROUTER_API_KEY"],
         api_base="https://openrouter.ai/api/v1",
-        extra_body={"provider": {"order": ["Cerebras"], "allow_fallbacks": False}},
+        extra_body={"provider": {"order": ["Cerebras"]}},
     )
     content = resp.choices[0].message.content
     return _parse_llm_content(content)
