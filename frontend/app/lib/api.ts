@@ -69,6 +69,13 @@ export interface SavedDocument {
   created_at: string;
 }
 
+export async function fetchTemplate(documentType: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/templates/${documentType}`);
+  if (!res.ok) return "";
+  const data = await res.json();
+  return (data.content as string) ?? "";
+}
+
 export async function listDocuments(token: string): Promise<SavedDocument[]> {
   const res = await fetch(`${API_BASE}/documents`, {
     headers: authHeaders(token),
