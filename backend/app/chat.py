@@ -7,8 +7,9 @@ from pathlib import Path
 
 import litellm
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth import get_optional_user
 from app.database import (
     append_message,
     create_session,
@@ -113,8 +114,8 @@ def _call_llm(history: list[dict], system_prompt: str) -> tuple[str, dict]:
 
 
 @router.post("")
-def create_session_route(req: CreateSessionRequest) -> dict:
-    session_id = create_session(req.document_type)
+def create_session_route(req: CreateSessionRequest, user_id: str | None = Depends(get_optional_user)) -> dict:
+    session_id = create_session(req.document_type, user_id)
     return {"session_id": session_id}
 
 

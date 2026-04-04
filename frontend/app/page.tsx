@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
+import { useAuth, UserButton } from "@clerk/clerk-react";
 import { useRouter } from "next/navigation";
 import { catalog, getSlug } from "./lib/catalog";
 import type { CatalogEntry } from "./lib/catalog";
@@ -59,22 +60,31 @@ function DocumentCard({ entry }: { entry: CatalogEntry }) {
 }
 
 export default function Home() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) router.push("/sign-in");
+  }, [isLoaded, isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isLoaded || !isSignedIn) return null;
+
   return (
     <div className="flex flex-col" style={{ minHeight: "100vh", background: "#f9fafb" }}>
       {/* Top nav */}
       <header
         style={{ background: "#032147", height: 56 }}
-        className="flex items-center px-6 flex-shrink-0"
+        className="flex items-center px-6 flex-shrink-0 gap-3"
       >
         <span style={{ color: "#ecad0a", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>
           Pre
         </span>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px", marginLeft: -10 }}>
           legal
         </span>
         <span
           style={{
-            marginLeft: 12,
+            marginLeft: 8,
             background: "#209dd7",
             color: "#fff",
             fontSize: 10,
@@ -86,14 +96,44 @@ export default function Home() {
         >
           BETA
         </span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={() => router.push("/history")}
+          style={{
+            color: "#ccc",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 13,
+            fontWeight: 500,
+            marginRight: 8,
+          }}
+        >
+          My Documents
+        </button>
+        <UserButton />
       </header>
+
+      {/* Hero */}
+      <div style={{ background: "#032147", borderBottom: "1px solid #0a3570", paddingBottom: 32 }}>
+        <div className="px-8 pt-10" style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <h1 style={{ color: "#fff", fontWeight: 700, fontSize: 28, marginBottom: 8, lineHeight: 1.2 }}>
+            Draft legal documents<br />
+            <span style={{ color: "#ecad0a" }}>faster, with AI.</span>
+          </h1>
+          <p style={{ color: "#8eadd4", fontSize: 15, maxWidth: 520, lineHeight: 1.6 }}>
+            Answer a few questions and get a professionally structured draft in minutes.
+            All documents are generated as drafts for attorney review.
+          </p>
+        </div>
+      </div>
 
       {/* Content */}
       <main className="flex-1 px-8 py-8" style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{ color: "#032147", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
-            Documents
-          </h1>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ color: "#032147", fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
+            Available Documents
+          </h2>
           <p style={{ color: "#888888", fontSize: 14 }}>
             Select a document type to begin drafting with AI assistance.
           </p>
