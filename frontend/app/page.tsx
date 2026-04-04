@@ -1,135 +1,77 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import ChatPanel from "./components/ChatPanel";
-import NdaPreview from "./components/NdaPreview";
-import { createSession, getSessionMessages, sendChatMessage } from "./lib/api";
-import { emptyFields, mergeFields } from "./types/nda";
-import type { Message, NdaFields } from "./types/nda";
+import React from "react";
+import { useRouter } from "next/navigation";
+import { catalog, getSlug } from "./lib/catalog";
+import type { CatalogEntry } from "./lib/catalog";
 
-const NAV_ITEMS = ["Dashboard", "Documents", "Templates", "Settings"];
-const SESSION_KEY = "prelegal_session_id";
-const FIELDS_KEY = "prelegal_fields";
+function DocumentCard({ entry }: { entry: CatalogEntry }) {
+  const router = useRouter();
+  const slug = getSlug(entry.filename);
 
-function Sidebar() {
   return (
-    <aside
-      style={{ width: 220, minHeight: "100%", background: "#fff", borderRight: "1px solid #e5e7eb" }}
-      className="flex-shrink-0 flex flex-col"
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #e5e7eb",
+        borderRadius: 10,
+        padding: "20px 24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        transition: "box-shadow 0.15s, border-color 0.15s",
+        cursor: "default",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.09)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "#209dd7";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "#e5e7eb";
+      }}
     >
-      <div className="flex flex-col gap-1 p-4 pt-6">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item}
-            disabled
-            style={{ color: "#888888", cursor: "default" }}
-            className="text-left px-3 py-2 rounded text-sm font-medium"
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="mt-auto p-4">
-        <p style={{ color: "#888888" }} className="text-xs">
-          V1 — coming soon
-        </p>
-      </div>
-    </aside>
+      <p style={{ color: "#032147", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
+        {entry.name}
+      </p>
+      <p style={{ color: "#888888", fontSize: 12, lineHeight: 1.6, flex: 1 }}>
+        {entry.description}
+      </p>
+      <button
+        onClick={() => router.push(`/documents/${slug}`)}
+        style={{
+          marginTop: 4,
+          background: "#753991",
+          color: "#fff",
+          border: "none",
+          borderRadius: 6,
+          padding: "7px 16px",
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: "pointer",
+          alignSelf: "flex-start",
+        }}
+      >
+        Draft
+      </button>
+    </div>
   );
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [fields, setFields] = useState<NdaFields>(emptyFields);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleAiResponse = useCallback((reply: string, newFields: NdaFields) => {
-    setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    setFields((prev) => {
-      const merged = mergeFields(prev, newFields);
-      try { localStorage.setItem(FIELDS_KEY, JSON.stringify(merged)); } catch { /* ignore */ }
-      return merged;
-    });
-  }, []);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(SESSION_KEY);
-    if (stored) {
-      // Restore existing session
-      setSessionId(stored);
-      getSessionMessages(stored)
-        .then((msgs) => {
-          // Parse reply text from assistant JSON messages; skip __init__
-          const visible = msgs
-            .filter((m) => m.content !== "__init__")
-            .map((m) => {
-              if (m.role === "assistant") {
-                try {
-                  const parsed = JSON.parse(m.content) as { reply?: string };
-                  return { role: m.role, content: parsed.reply ?? m.content };
-                } catch {
-                  return m;
-                }
-              }
-              return m;
-            });
-          setMessages(visible);
-          const storedFields = localStorage.getItem(FIELDS_KEY);
-          if (storedFields) setFields(JSON.parse(storedFields));
-        })
-        .catch(() => {
-          // Session gone — start fresh
-          localStorage.removeItem(SESSION_KEY);
-          localStorage.removeItem(FIELDS_KEY);
-          startSession();
-        });
-    } else {
-      startSession();
-    }
-
-    async function startSession() {
-      setLoading(true);
-      try {
-        const id = await createSession();
-        localStorage.setItem(SESSION_KEY, id);
-        setSessionId(id);
-        const res = await sendChatMessage(id, "__init__");
-        handleAiResponse(res.reply, res.fields);
-      } catch {
-        setMessages([{ role: "assistant", content: "Unable to connect. Please refresh to try again." }]);
-      } finally {
-        setLoading(false);
-      }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSend = useCallback(async (text: string) => {
-    if (!sessionId || loading) return;
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setLoading(true);
-    try {
-      const res = await sendChatMessage(sessionId, text);
-      handleAiResponse(res.reply, res.fields);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Something went wrong"}` },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId, loading, handleAiResponse]);
-
   return (
-    <div className="flex flex-col" style={{ height: "100vh", background: "#f9fafb" }}>
+    <div className="flex flex-col" style={{ minHeight: "100vh", background: "#f9fafb" }}>
       {/* Top nav */}
       <header
         style={{ background: "#032147", height: 56 }}
         className="flex items-center px-6 flex-shrink-0"
       >
-        <span style={{ color: "#ecad0a", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>Pre</span>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>legal</span>
+        <span style={{ color: "#ecad0a", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>
+          Pre
+        </span>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: "-0.5px" }}>
+          legal
+        </span>
         <span
           style={{
             marginLeft: 12,
@@ -144,25 +86,31 @@ export default function Home() {
         >
           BETA
         </span>
-        <span style={{ marginLeft: "auto", color: "#fff", fontSize: 14, fontWeight: 500 }}>
-          Mutual NDA Creator
-        </span>
       </header>
 
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-
-        {/* Two-panel main area */}
-        <div className="flex flex-1 overflow-hidden">
-          <div style={{ flex: "0 0 42%" }} className="overflow-hidden">
-            <ChatPanel messages={messages} loading={loading} onSend={handleSend} />
-          </div>
-          <div style={{ flex: 1 }} className="overflow-hidden">
-            <NdaPreview fields={fields} />
-          </div>
+      {/* Content */}
+      <main className="flex-1 px-8 py-8" style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ color: "#032147", fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+            Documents
+          </h1>
+          <p style={{ color: "#888888", fontSize: 14 }}>
+            Select a document type to begin drafting with AI assistance.
+          </p>
         </div>
-      </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: 16,
+          }}
+        >
+          {catalog.map((entry) => (
+            <DocumentCard key={entry.filename} entry={entry} />
+          ))}
+        </div>
+      </main>
     </div>
   );
 }

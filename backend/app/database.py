@@ -27,6 +27,7 @@ def init_db() -> None:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
+                document_type TEXT NOT NULL DEFAULT 'Mutual-NDA-coverpage',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS messages (
@@ -37,19 +38,34 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
+        # Migrate existing DB if document_type column is missing
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "document_type" not in cols:
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'Mutual-NDA-coverpage'"
+            )
 
 
-def create_session() -> str:
+def create_session(document_type: str) -> str:
     """Insert a new session row and return its UUID."""
     session_id = str(uuid.uuid4())
     with get_connection() as conn:
-        conn.execute("INSERT INTO sessions (id) VALUES (?)", (session_id,))
+        conn.execute(
+            "INSERT INTO sessions (id, document_type) VALUES (?, ?)",
+            (session_id, document_type),
+        )
     return session_id
 
 
 def session_exists(session_id: str) -> bool:
     with get_connection() as conn:
         return conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is not None
+
+
+def get_session_document_type(session_id: str) -> str | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT document_type FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    return row["document_type"] if row else None
 
 
 def get_messages(session_id: str) -> list[dict]:

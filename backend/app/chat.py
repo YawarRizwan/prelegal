@@ -9,87 +9,98 @@ import litellm
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
 
-from app.database import append_message, create_session, get_messages, session_exists
-from app.models import ChatRequest, ChatResponse, NdaFields
+from app.database import (
+    append_message,
+    create_session,
+    get_messages,
+    get_session_document_type,
+    session_exists,
+)
+from app.models import ChatRequest, ChatResponse, CreateSessionRequest
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 router = APIRouter(prefix="/sessions", tags=["chat"])
 
-SYSTEM_PROMPT = """You are a friendly legal assistant helping two parties draft a Mutual Non-Disclosure Agreement (MNDA).
+TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
-Your job is to collect the required information through natural conversation, then populate the fields.
 
-Fields to collect:
-- Party 1: company name, signatory's full name, title, notice address (email or postal)
-- Party 2: company name, signatory's full name, title, notice address
-- Purpose: how Confidential Information may be used
-- Effective date (format: YYYY-MM-DD; if user says "today", use today's date)
-- MNDA term: number of years OR continues until terminated
-- Term of confidentiality: number of years OR in perpetuity
-- Governing law (US state)
-- Jurisdiction (city/county and state, e.g. "courts located in New Castle, DE")
-- Modifications to standard terms (optional — ask last)
+def _load_template(document_type: str) -> str:
+    path = TEMPLATES_DIR / f"{document_type}.md"
+    if path.exists():
+        return path.read_text(encoding="utf-8")[:4000]
+    return ""
 
-Conversation rules:
-- When you receive "__init__", greet the user warmly and ask for Party 1's company name
+
+def _build_system_prompt(document_type: str) -> str:
+    doc_name = document_type.replace("-", " ")
+    template_content = _load_template(document_type)
+    template_section = f"<template>\n{template_content}\n</template>\n\n" if template_content else ""
+
+    return f"""You are a legal assistant helping a user draft a {doc_name}.
+
+{template_section}Your task: collect the key fields needed to complete this document through natural conversation.
+
+When you receive "__init__": greet the user, briefly name the document type, and ask for the first key piece of information (typically the parties' names or company names).
+
+Rules:
 - Ask 1-2 questions at a time; be concise and professional
 - Acknowledge each answer before asking the next question
-- When all required fields are collected, congratulate the user and suggest downloading the document
+- Identify fields from the template structure (use snake_case keys, e.g. party1_company, effective_date, governing_law)
+- When all key fields are collected, congratulate the user and suggest they review the document
 
-You MUST respond with a JSON object in exactly this format:
-{
+Always respond with this exact JSON format:
+{{
   "reply": "your conversational message to the user",
-  "fields": {
-    "party1_company": null,
-    "party1_name": null,
-    "party1_title": null,
-    "party1_address": null,
-    "party2_company": null,
-    "party2_name": null,
-    "party2_title": null,
-    "party2_address": null,
-    "purpose": null,
-    "effective_date": null,
-    "mnda_term_type": null,
-    "mnda_term_years": null,
-    "confidentiality_term_type": null,
-    "confidentiality_term_years": null,
-    "governing_law": null,
-    "jurisdiction": null,
-    "modifications": null
-  }
-}
+  "fields": {{
+    "field_key": "collected value or null if not yet collected"
+  }}
+}}
 
 Critical rules:
-- Include ALL 17 field keys in every response
-- Use null for fields not yet collected — never invent values
-- Carry forward all previously collected values (do not reset them to null)
-- mnda_term_type must be "years" or "terminated" or null
-- confidentiality_term_type must be "years" or "perpetuity" or null
-- mnda_term_years and confidentiality_term_years must be integers or null
-- effective_date must be YYYY-MM-DD or null
+- Use null for uncollected fields — never invent values
+- Carry forward all previously collected values — do not reset them to null
+- Keep field keys consistent throughout the entire conversation
 """
 
 
-def _parse_llm_content(content: str) -> tuple[str, NdaFields]:
-    """Parse JSON from LLM response, handling markdown code blocks."""
+def _parse_llm_content(content: str) -> tuple[str, dict]:
+    """Parse JSON from LLM response, handling markdown code blocks and bare JSON."""
+    if not content:
+        raise ValueError("Empty response from LLM")
+
+    content = content.strip().lstrip("\ufeff")
+
+    # Direct parse
     try:
         data = json.loads(content)
+        return data.get("reply", ""), data.get("fields", {})
     except json.JSONDecodeError:
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
-        if match:
+        pass
+
+    # Markdown code block
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
+    if match:
+        try:
             data = json.loads(match.group(1).strip())
-        else:
-            raise ValueError(f"Cannot parse JSON from response: {content[:300]}")
+            return data.get("reply", ""), data.get("fields", {})
+        except json.JSONDecodeError:
+            pass
 
-    fields = NdaFields.model_validate(data.get("fields", {}))
-    reply = data.get("reply", "")
-    return reply, fields
+    # Extract first {...} object from prose response
+    match = re.search(r"\{[\s\S]*\}", content)
+    if match:
+        try:
+            data = json.loads(match.group(0))
+            return data.get("reply", ""), data.get("fields", {})
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"Cannot parse JSON from response: {content[:300]}")
 
 
-def _call_llm(history: list[dict]) -> tuple[str, NdaFields]:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+def _call_llm(history: list[dict], system_prompt: str) -> tuple[str, dict]:
+    messages = [{"role": "system", "content": system_prompt}] + history
     resp = litellm.completion(
         model="openrouter/openai/gpt-oss-120b",
         messages=messages,
@@ -98,13 +109,12 @@ def _call_llm(history: list[dict]) -> tuple[str, NdaFields]:
         api_base="https://openrouter.ai/api/v1",
         extra_body={"provider": {"order": ["Cerebras"]}},
     )
-    content = resp.choices[0].message.content
-    return _parse_llm_content(content)
+    return _parse_llm_content(resp.choices[0].message.content or "")
 
 
 @router.post("")
-def create_session_route() -> dict:
-    session_id = create_session()
+def create_session_route(req: CreateSessionRequest) -> dict:
+    session_id = create_session(req.document_type)
     return {"session_id": session_id}
 
 
@@ -119,12 +129,13 @@ def get_session_messages(session_id: str) -> dict:
 def send_message(session_id: str, req: ChatRequest) -> ChatResponse:
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    document_type = get_session_document_type(session_id) or "Mutual-NDA-coverpage"
     append_message(session_id, "user", req.text)
     history = get_messages(session_id)
+    system_prompt = _build_system_prompt(document_type)
     try:
-        reply, fields = _call_llm(history)
+        reply, fields = _call_llm(history, system_prompt)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
-    # Store full JSON so the LLM sees structured field context on future turns
-    append_message(session_id, "assistant", json.dumps({"reply": reply, "fields": fields.model_dump()}))
+    append_message(session_id, "assistant", json.dumps({"reply": reply, "fields": fields}))
     return ChatResponse(reply=reply, fields=fields)

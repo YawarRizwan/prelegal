@@ -1,5 +1,6 @@
 """Prelegal FastAPI application."""
 
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app.chat import router as chat_router
 from app.database import init_db
+
+CATALOG_PATH = Path(__file__).parent.parent.parent / "catalog.json"
 
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
 
@@ -35,6 +38,11 @@ app.include_router(chat_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/catalog")
+def get_catalog():
+    return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
 
 
 # Serve static frontend — mounted last so API routes take precedence

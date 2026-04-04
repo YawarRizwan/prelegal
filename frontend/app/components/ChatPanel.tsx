@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import type { Message } from "../types/nda";
+import type { Message } from "../types/document";
 
 interface Props {
   messages: Message[];
   loading: boolean;
   onSend: (text: string) => void;
+  title?: string;
+  subtitle?: string;
 }
 
-export default function ChatPanel({ messages, loading, onSend }: Props) {
+export default function ChatPanel({ messages, loading, onSend, title = "Legal Assistant", subtitle }: Props) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -32,8 +34,8 @@ export default function ChatPanel({ messages, loading, onSend }: Props) {
         style={{ borderBottom: "1px solid #e5e7eb", background: "#fff" }}
         className="px-4 py-3 flex-shrink-0"
       >
-        <p style={{ color: "#032147", fontWeight: 600, fontSize: 14 }}>NDA Assistant</p>
-        <p style={{ color: "#888888", fontSize: 12 }}>Mutual Non-Disclosure Agreement</p>
+        <p style={{ color: "#032147", fontWeight: 600, fontSize: 14 }}>{title}</p>
+        {subtitle && <p style={{ color: "#888888", fontSize: 12 }}>{subtitle}</p>}
       </div>
 
       {/* Message list */}

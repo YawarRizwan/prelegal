@@ -1,0 +1,266 @@
+"use client";
+
+import React from "react";
+import type { DocumentFields } from "../types/document";
+
+interface Props {
+  fields: DocumentFields;
+  documentName: string;
+  slug: string;
+}
+
+function formatKey(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function f(fields: DocumentFields, key: string, fallback = ""): string {
+  const v = fields[key];
+  return v ?? fallback;
+}
+
+function buildNdaHtml(fields: DocumentFields): string {
+  const party1 = f(fields, "party1_company", f(fields, "party1_name", "[Party 1]"));
+  const party2 = f(fields, "party2_company", f(fields, "party2_name", "[Party 2]"));
+  const purpose = f(fields, "purpose", "[Purpose]");
+  const effectiveDate = f(fields, "effective_date", "[Effective Date]");
+  const mndaTerm = f(fields, "mnda_term", f(fields, "mnda_term_years", "[MNDA Term]"));
+  const confTerm = f(fields, "confidentiality_term", f(fields, "confidentiality_term_years", "[Confidentiality Term]"));
+  const governingLaw = f(fields, "governing_law", "[Governing Law]");
+  const jurisdiction = f(fields, "jurisdiction", "[Jurisdiction]");
+  const modifications = f(fields, "modifications", "");
+  const party1Title = f(fields, "party1_title", "");
+  const party2Title = f(fields, "party2_title", "");
+  const party1Address = f(fields, "party1_address", "");
+  const party2Address = f(fields, "party2_address", "");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Mutual Non-Disclosure Agreement</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, "Times New Roman", serif; background: #f9fafb; padding: 40px 24px; font-size: 13px; color: #1a1a1a; line-height: 1.7; }
+    .doc { background: #fff; max-width: 720px; margin: 0 auto; padding: 48px; border: 1px solid #e5e7eb; border-radius: 4px; }
+    h1 { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    h2 { font-size: 14px; font-weight: 600; text-align: center; color: #555; margin-bottom: 20px; }
+    .intro { font-size: 12px; color: #555; margin-bottom: 24px; line-height: 1.6; }
+    .section { margin-bottom: 18px; }
+    .section-title { font-weight: 700; margin-bottom: 4px; }
+    .section-sub { font-size: 11px; color: #888; margin-bottom: 6px; }
+    .check { margin-right: 8px; }
+    .sig-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 20px; }
+    .sig-table th, .sig-table td { border: 1px solid #ccc; padding: 7px 10px; }
+    .sig-table th { font-weight: 600; text-align: center; }
+    .sig-table td:first-child { font-weight: 500; }
+    .footer { margin-top: 20px; font-size: 11px; color: #888; text-align: center; }
+    .placeholder { color: #bbb; }
+    @media print { body { background: #fff; padding: 0; } .doc { border: none; } }
+  </style>
+</head>
+<body>
+  <div class="doc">
+    <h1>Mutual Non-Disclosure Agreement</h1>
+    <h2>Cover Page</h2>
+
+    <p class="intro">
+      This Mutual Non-Disclosure Agreement (the &ldquo;MNDA&rdquo;) consists of: (1) this Cover Page and (2)
+      the Common Paper Mutual NDA Standard Terms Version 1.0. Any modifications of the Standard Terms
+      should be made on the Cover Page, which will control over conflicts with the Standard Terms.
+    </p>
+
+    <div class="section">
+      <p class="section-title">Purpose</p>
+      <p class="section-sub">How Confidential Information may be used</p>
+      <p>${purpose}</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Effective Date</p>
+      <p>${effectiveDate}</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">MNDA Term</p>
+      <p class="section-sub">The length of this MNDA</p>
+      <p><span class="check">[x]</span>${mndaTerm}</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Term of Confidentiality</p>
+      <p class="section-sub">How long Confidential Information is protected</p>
+      <p><span class="check">[x]</span>${confTerm}</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Governing Law &amp; Jurisdiction</p>
+      <p>Governing Law: ${governingLaw}</p>
+      <p>Jurisdiction: ${jurisdiction || '<span class="placeholder">[Jurisdiction]</span>'}</p>
+    </div>
+
+    ${modifications ? `<div class="section"><p class="section-title">MNDA Modifications</p><p>${modifications}</p></div>` : ""}
+
+    <p style="margin-bottom:20px;font-style:italic;font-size:12px">
+      By signing this Cover Page, each party agrees to enter into this MNDA as of the Effective Date.
+    </p>
+
+    <table class="sig-table">
+      <thead>
+        <tr>
+          <td style="width:34%"></td>
+          <th>Party 1</th>
+          <th>Party 2</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Signature</td><td></td><td></td></tr>
+        <tr><td>Print Name</td><td>${f(fields, "party1_name")}</td><td>${f(fields, "party2_name")}</td></tr>
+        <tr><td>Title</td><td>${party1Title}</td><td>${party2Title}</td></tr>
+        <tr><td>Company</td><td>${party1}</td><td>${party2}</td></tr>
+        <tr><td>Notice Address</td><td>${party1Address}</td><td>${party2Address}</td></tr>
+        <tr><td>Date</td><td>${effectiveDate}</td><td>${effectiveDate}</td></tr>
+      </tbody>
+    </table>
+
+    <p class="footer">Common Paper Mutual Non-Disclosure Agreement (Version 1.0) &mdash; free to use under CC BY 4.0</p>
+    <p class="footer" style="margin-top:8px">Generated by Prelegal &mdash; use Ctrl+P / Cmd+P to save as PDF</p>
+  </div>
+</body>
+</html>`;
+}
+
+function buildGenericHtml(fields: DocumentFields, documentName: string, collected: [string, string | null][]): string {
+  const rows = collected
+    .map(
+      ([key, value]) => `
+      <tr>
+        <td style="padding:10px 16px;font-weight:600;color:#888;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;border-bottom:1px solid #f0f0f0">${formatKey(key)}</td>
+        <td style="padding:10px 16px;color:#032147;font-size:14px;border-bottom:1px solid #f0f0f0">${value}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${documentName}</title>
+  <style>
+    body { font-family: Georgia, serif; background: #f9fafb; margin: 0; padding: 40px 24px; }
+    .card { background: #fff; max-width: 720px; margin: 0 auto; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; }
+    .header { background: #032147; padding: 24px 32px; }
+    .header h1 { color: #fff; margin: 0; font-size: 20px; font-weight: 700; }
+    .header p { color: #ecad0a; margin: 4px 0 0; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    .footer { padding: 16px 32px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; }
+    @media print { body { background: #fff; padding: 0; } .card { border: none; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>${documentName}</h1>
+      <p>${collected.length} fields collected</p>
+    </div>
+    <table>${rows}</table>
+    <div class="footer">Generated by Prelegal &mdash; use Ctrl+P / Cmd+P to print or save as PDF</div>
+  </div>
+</body>
+</html>`;
+}
+
+const NDA_SLUGS = new Set(["Mutual-NDA-coverpage", "Mutual-NDA"]);
+
+export default function FieldListPreview({ fields, documentName, slug }: Props) {
+  const collected = Object.entries(fields).filter(
+    ([, v]) => v !== null && v !== undefined && v !== ""
+  ) as [string, string][];
+  const total = Object.keys(fields).length;
+  const done = collected.length;
+
+  const handleDownload = () => {
+    const html = NDA_SLUGS.has(slug)
+      ? buildNdaHtml(fields)
+      : buildGenericHtml(fields, documentName, collected);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  };
+
+  return (
+    <div className="flex flex-col h-full" style={{ background: "#fff" }}>
+      {/* Header */}
+      <div
+        style={{ borderBottom: "1px solid #e5e7eb", background: "#fff" }}
+        className="px-4 py-3 flex-shrink-0 flex items-center justify-between"
+      >
+        <div>
+          <p style={{ color: "#032147", fontWeight: 600, fontSize: 14 }}>{documentName}</p>
+          <p style={{ color: "#888888", fontSize: 12 }}>
+            {total > 0
+              ? `${done} of ${total} fields collected`
+              : "Chat to begin collecting fields"}
+          </p>
+        </div>
+        {collected.length > 0 && (
+          <button
+            onClick={handleDownload}
+            style={{
+              background: "#753991",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "5px 14px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Download
+          </button>
+        )}
+      </div>
+
+      {/* Field list */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {collected.length === 0 ? (
+          <p
+            style={{
+              color: "#888888",
+              fontSize: 13,
+              textAlign: "center",
+              marginTop: 48,
+            }}
+          >
+            Fields will appear here as you chat with the assistant.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {collected.map(([key, value]) => (
+              <div
+                key={key}
+                style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: 12 }}
+              >
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#888888",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    marginBottom: 2,
+                  }}
+                >
+                  {formatKey(key)}
+                </p>
+                <p style={{ fontSize: 13, color: "#032147" }}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

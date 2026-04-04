@@ -4,10 +4,23 @@ $root = Split-Path -Parent $PSScriptRoot
 $pidsDir = Join-Path $root ".pids"
 New-Item -ItemType Directory -Force -Path $pidsDir | Out-Null
 
+# Free ports before starting to avoid port conflicts from stale processes
+foreach ($port in @(3000, 8000)) {
+    $pids = (netstat -ano | Select-String ":$port\s" | ForEach-Object { ($_ -split '\s+')[-1] } | Sort-Object -Unique)
+    foreach ($p in $pids) {
+        if ($p -match '^\d+$' -and $p -ne '0') {
+            Stop-Process -Id ([int]$p) -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+$uvPath = "$env:USERPROFILE\.local\bin\uv.exe"
+if (-not (Test-Path $uvPath)) { $uvPath = "uv" }
+
 Write-Host "Starting Prelegal backend..."
 Set-Location (Join-Path $root "backend")
-uv sync --quiet
-$backend = Start-Process -FilePath "uv" -ArgumentList "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" -PassThru -WindowStyle Hidden
+& $uvPath sync --quiet
+$backend = Start-Process -FilePath $uvPath -ArgumentList "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" -PassThru -WindowStyle Hidden
 $backend.Id | Out-File (Join-Path $pidsDir "backend.pid") -Encoding ascii
 
 Write-Host "Starting Prelegal frontend..."

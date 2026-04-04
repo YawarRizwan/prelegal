@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-No product features are implemented yet. The current state is the V1 technical foundation (placeholder UI, FastAPI backend, SQLite bootstrap). Auth, AI chat, and document persistence are planned for future tickets.
+The V1 technical foundation is in place and the AI chat feature for Mutual NDA drafting is implemented. Auth and document persistence are planned for future tickets.
 
 ## Development process
 
@@ -63,3 +63,13 @@ Backend available at http://localhost:8000
 - `docker-compose.yml` — Builds and runs the container; DB persisted via a named volume.
 - `scripts/` — Direct-run start/stop scripts for Mac, Linux, and Windows (no Docker). Run frontend dev server on port 3000 and backend on port 8000 in parallel using PID files.
 - No authentication implemented yet. Users table not created.
+
+### PL-5 — AI Chat for Mutual NDA (done)
+- `backend/app/chat.py` — Chat API router (`/sessions`). Creates sessions, stores message history in SQLite, calls LLM via LiteLLM/OpenRouter (`openai/gpt-oss-120b`, Cerebras provider) with structured JSON output to extract NDA fields.
+- `backend/app/models.py` — Pydantic models: `NdaFields`, `ChatRequest`, `ChatResponse`.
+- `backend/app/database.py` — Extended with sessions and messages tables; helpers: `create_session`, `session_exists`, `append_message`, `get_messages`.
+- `frontend/app/components/ChatPanel.tsx` — Chat UI with message bubbles, typing indicator, and send form.
+- `frontend/app/components/NdaPreview.tsx` — Live NDA document preview, updates as fields are collected.
+- `frontend/app/lib/api.ts` — API client for session creation, message history, and sending messages.
+- `frontend/app/types/nda.ts` — Shared TypeScript types for messages and NDA fields.
+- `frontend/app/page.tsx` — Two-panel layout: chat (42%) + NDA preview (58%). Session persisted in localStorage.
