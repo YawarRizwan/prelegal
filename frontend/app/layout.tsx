@@ -1,16 +1,18 @@
-"use client";
-
-import { ClerkProvider } from "@clerk/clerk-react";
+import type { Metadata } from "next";
+import ClerkClientProvider from "./components/ClerkClientProvider";
 import "./globals.css";
 
-const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+export const metadata: Metadata = {
+  title: "Prelegal – Legal Document Drafting",
+  description: "Draft legal agreements with AI assistance",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+    <ClerkClientProvider>
       <html lang="en">
         <body className="bg-gray-50 text-gray-900">{children}</body>
       </html>
-    </ClerkProvider>
+    </ClerkClientProvider>
   );
 }
