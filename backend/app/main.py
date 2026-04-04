@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.chat import router as chat_router
 from app.database import init_db
+from app.documents import router as documents_router
 
 CATALOG_PATH = Path(__file__).parent.parent.parent / "catalog.json"
 
@@ -33,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(documents_router)
 
 
 @app.get("/health")

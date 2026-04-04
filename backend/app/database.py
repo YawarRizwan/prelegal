@@ -28,6 +28,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 document_type TEXT NOT NULL DEFAULT 'Mutual-NDA-coverpage',
+                user_id TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS messages (
@@ -37,22 +38,33 @@ def init_db() -> None:
                 content TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_id TEXT REFERENCES sessions(id),
+                document_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                fields_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
-        # Migrate existing DB if document_type column is missing
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
-        if "document_type" not in cols:
+        # Migrate existing DB: add missing columns
+        session_cols = [row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "document_type" not in session_cols:
             conn.execute(
                 "ALTER TABLE sessions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'Mutual-NDA-coverpage'"
             )
+        if "user_id" not in session_cols:
+            conn.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
 
 
-def create_session(document_type: str) -> str:
+def create_session(document_type: str, user_id: str | None = None) -> str:
     """Insert a new session row and return its UUID."""
     session_id = str(uuid.uuid4())
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO sessions (id, document_type) VALUES (?, ?)",
-            (session_id, document_type),
+            "INSERT INTO sessions (id, document_type, user_id) VALUES (?, ?, ?)",
+            (session_id, document_type, user_id),
         )
     return session_id
 
@@ -83,3 +95,24 @@ def append_message(session_id: str, role: str, content: str) -> None:
             "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
             (session_id, role, content),
         )
+
+
+def save_document(user_id: str, session_id: str, document_type: str, title: str, fields_json: str) -> str:
+    """Save a completed document and return its ID."""
+    doc_id = str(uuid.uuid4())
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO documents (id, user_id, session_id, document_type, title, fields_json) VALUES (?, ?, ?, ?, ?, ?)",
+            (doc_id, user_id, session_id, document_type, title, fields_json),
+        )
+    return doc_id
+
+
+def list_documents(user_id: str) -> list[dict]:
+    """Return all documents for a user, newest first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, session_id, document_type, title, fields_json, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]

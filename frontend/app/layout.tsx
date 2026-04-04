@@ -1,15 +1,16 @@
-import type { Metadata } from "next";
+"use client";
+
+import { ClerkProvider } from "@clerk/clerk-react";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Prelegal – Legal Document Drafting",
-  description: "Draft legal agreements with AI assistance",
-};
+const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 text-gray-900">{children}</body>
-    </html>
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+      <html lang="en">
+        <body className="bg-gray-50 text-gray-900">{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }
