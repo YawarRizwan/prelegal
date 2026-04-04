@@ -66,10 +66,17 @@ Backend available at http://localhost:8000
 
 ### PL-5 — AI Chat for Mutual NDA (done)
 - `backend/app/chat.py` — Chat API router (`/sessions`). Creates sessions, stores message history in SQLite, calls LLM via LiteLLM/OpenRouter (`openai/gpt-oss-120b`, Cerebras provider) with structured JSON output to extract NDA fields.
-- `backend/app/models.py` — Pydantic models: `NdaFields`, `ChatRequest`, `ChatResponse`.
+- `backend/app/models.py` — Pydantic models: `ChatRequest`, `ChatResponse`.
 - `backend/app/database.py` — Extended with sessions and messages tables; helpers: `create_session`, `session_exists`, `append_message`, `get_messages`.
 - `frontend/app/components/ChatPanel.tsx` — Chat UI with message bubbles, typing indicator, and send form.
-- `frontend/app/components/NdaPreview.tsx` — Live NDA document preview, updates as fields are collected.
 - `frontend/app/lib/api.ts` — API client for session creation, message history, and sending messages.
-- `frontend/app/types/nda.ts` — Shared TypeScript types for messages and NDA fields.
-- `frontend/app/page.tsx` — Two-panel layout: chat (42%) + NDA preview (58%). Session persisted in localStorage.
+
+### PL-6 — Expand to All Supported Legal Document Types (done)
+- `frontend/app/page.tsx` — Home page with catalog-driven document cards; each card has a Draft button routing to `/documents/[slug]`.
+- `frontend/app/lib/catalog.ts` — Frontend catalog mirroring `catalog.json`; provides `getSlug` and `findBySlug` helpers.
+- `frontend/app/documents/[slug]/page.tsx` — Static-param page for each document type.
+- `frontend/app/documents/[slug]/DocumentChat.tsx` — Generic two-panel chat layout (chat 42% + field preview 58%) for any document type. Session and fields persisted in `localStorage` per slug.
+- `frontend/app/components/FieldListPreview.tsx` — Right panel showing collected fields as a list. Download button appears once fields are collected; for Mutual NDA slugs renders a full cover-page HTML document in a new tab (Ctrl+P to save as PDF); other document types get a formatted field-list preview.
+- `frontend/app/types/document.ts` — Shared `DocumentFields` and `Message` types.
+- `frontend/next.config.ts` — `devIndicators: false` to hide the Next.js dev badge.
+- `scripts/start-windows.ps1` — Clears ports 3000 and 8000 before starting to prevent stale-process conflicts.
