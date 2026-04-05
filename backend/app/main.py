@@ -5,14 +5,16 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.chat import router as chat_router
 from app.database import init_db
+from app.documents import router as documents_router
 
 CATALOG_PATH = Path(__file__).parent.parent.parent / "catalog.json"
+TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
 
@@ -33,6 +35,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(documents_router)
 
 
 @app.get("/health")
@@ -43,6 +46,14 @@ def health():
 @app.get("/catalog")
 def get_catalog():
     return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/templates/{document_type}")
+def get_template(document_type: str):
+    path = TEMPLATES_DIR / f"{document_type}.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"content": path.read_text(encoding="utf-8")}
 
 
 # Serve static frontend — mounted last so API routes take precedence
